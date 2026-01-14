@@ -22,6 +22,8 @@ func (h *Handler) Router() http.Handler {
 	// и со слешем, и без — чтобы /users/1 работало
 	mux.HandleFunc("/users", h.users)
 	mux.HandleFunc("/users/", h.users)
+	mux.HandleFunc("/notes", h.notes)
+	mux.HandleFunc("/notes/", h.notes)
 
 	return mux
 }
