@@ -1,22 +1,46 @@
-name: Deploy zametki
+name: deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
 
       - name: Build
-        run: go build ./cmd/app
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o zametki ./cmd/app
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY_ZAMETKI }}
+
+      - name: Add known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST_ZAMETKI }}" >> ~/.ssh/known_hosts
+
+      - name: Upload binary
+        run: |
+          scp -o StrictHostKeyChecking=yes ./zametki "${{ secrets.DEPLOY_USER_ZAMETKI }}@${{ secrets.DEPLOY_HOST_ZAMETKI }}:/opt/zametki/zametki.new"
+
+      - name: Activate and restart service
+        run: |
+          ssh "${{ secrets.DEPLOY_USER_ZAMETKI }}@${{ secrets.DEPLOY_HOST_ZAMETKI }}" "set -euo pipefail
+            sudo install -o zametki -g zametki -m 0755 /opt/zametki/zametki.new /opt/zametki/zametki
+            rm -f /opt/zametki/zametki.new
+            sudo systemctl restart zametki
+            sudo systemctl --no-pager -l status zametki | tail -n 50
+          "
